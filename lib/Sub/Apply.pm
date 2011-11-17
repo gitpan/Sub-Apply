@@ -4,31 +4,37 @@ use 5.008008;
 use strict;
 use warnings;
 use parent 'Exporter';
+use Carp ();
 
-our $VERSION   = '0.02';
+our $VERSION   = '0.03';
 our @EXPORT_OK = qw(apply apply_if);
 
 sub apply {
     my $orig   = shift;
     my $caller = caller;
-    my $proc   = _proc( $caller, $orig );
-    die "no such proc:$orig" unless $proc;
+    my $proc   = _find_proc( $caller, $orig );
+    Carp::croak "No such proc $orig" unless $proc;
     $proc->(@_);
 }
 
 sub apply_if {
     my $orig   = shift;
     my $caller = caller;
-    my $proc   = _proc( $caller, $orig );
+    my $proc   = _find_proc( $caller, $orig );
     return unless $proc;
     $proc->(@_);
 }
 
-sub _proc {
+sub _find_proc {
     my ( $caller, $proc ) = @_;
     ( my $package, $proc ) = $proc =~ m/^(?:(.+)::)?(.+)$/;
-    return $package && $package->can($proc)
-        || $caller->can($proc);
+    $package ||= $caller;
+    my $code = do {
+        no strict 'refs';
+        my $stash = \%{ $package . '::' };
+        $stash && $stash->{$proc} && *{ $stash->{$proc} }{CODE};
+    };
+    return $code;
 }
 
 1;
